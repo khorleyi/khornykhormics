@@ -1,0 +1,246 @@
+{
+  "name": "initialize-story",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "initialize-story",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bfe844a0-158d-4f56-ad34-dfdcafa46543",
+      "name": "Webhook",
+      "webhookId": "85dd4b7d-75f7-4e4a-baed-00776360f8ef"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"# ROLE\\nYou are the Narrative Director for an AI manga visual novel. You provide HIGH-LEVEL guidance and ensure story coherence, but you do NOT create detailed scenes.\\n\\n# INPUT\\n- User's Story Theme: {{ $json.body.user_prompt }}\\n- Protagonist Description: {{ $json.body.character_decision }}\\n\\n# YOUR TASK\\nCreate a VAGUE narrative framework that will guide the story's development. This is NOT a detailed plan—think of it as thematic direction and narrative guardrails.\\n\\n# OUTPUT FORMAT (JSON)\\n{\\n  \\\"system_prompt\\\": \\\"The overarching narrative voice and world rules\\\",\\n  \\\"narrative_arc\\\": {\\n    \\\"opening_intent\\\": \\\"What should the story establish initially?\\\",\\n    \\\"rising_action_themes\\\": [\\\"theme1\\\", \\\"theme2\\\", \\\"theme3\\\"],\\n    \\\"potential_climax_directions\\\": [\\\"possible climax 1\\\", \\\"possible climax 2\\\"],\\n    \\\"resolution_guidance\\\": \\\"How should endings reflect user choices?\\\"\\n  },\\n  \\\"manga_metadata\\\": {\\n    \\\"genre\\\": \\\"...\\\",\\n    \\\"art_style\\\": \\\"...\\\",\\n    \\\"tone\\\": \\\"...\\\"\\n  },\\n  \\\"inventory\\\": {},\\n  \\\"scene_tracker\\\": {\\n    \\\"current_scene\\\": 1,\\n    \\\"decision_count\\\": 0,\\n    \\\"story_phase\\\": \\\"opening\\\"\\n  }\\n}\\n\\n# KEY PRINCIPLES\\n1. **Vague > Specific:** Provide thematic direction, not plot points\\n2. **Flexible:** Allow Storyteller Agent creative freedom within your guidelines\\n3. **Adaptive:** Your framework should accommodate various user choices\\n4. **Thematic:** Focus on emotional arcs and character development themes\\n\\n# The Storyteller Agent will handle all specific narrative details.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.8,\n    \"response_mime_type\": \"application/json\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        464,
+        -224
+      ],
+      "id": "85b464d5-25b7-410f-a288-c7760e1e7782",
+      "name": "Manager Agent",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9HJcaRQ7pXXIVLH3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. MANAGER AGENT: Extract and Parse overall_story JSON string\n// Drag the 'text' field from the Manager Agent output (from the Webhook/Manager Agent node history)\nconst managerText = $('Manager Agent1').first().json.candidates[0].content.parts[0].text;\nconst overall_story = JSON.parse(managerText);\n\n// 2. CHARACTER AGENT: Extract and Parse character_profile JSON string\n// Drag the 'text' field from the current input (Character Agent output)\nconst characterText = $input.first().json.candidates[0].content.parts[0].text\n\n// We assume the agent output is a JSON string with a top-level \"character_profile\" key\nconst character_profile = JSON.parse(characterText);\n\n// 3. SESSION DATA: Retrieve initial Webhook data\n// Drag the session_id and user_prompt from the Webhook node output (from the Webhook node history)\nconst session_id = $('Webhook').first().json.body.session_id;\nconst user_prompt = $('Webhook').first().json.body.user_prompt;\n\n// 4. Assemble the final initial state object\nconst initialState = {\n    \"session_id\": session_id,\n    \"overall_story\": overall_story,\n    \"character_profile\": character_profile,\n    // Initial state for tracking:\n    \"current_scene\": 1,\n    \"decision_history\": [],\n  \"phase\": \"ready_for_scene_1\",\n    \"user_prompt\": user_prompt,\n    \"decision_count\": 0,\n    \"story_phase\": overall_story.scene_tracker.story_phase, // Retrieve current phase from LLM output\n    \"is_complete\": false  \n};\n\n// Return the final data structure to be sent to Streamlit\nreturn { json: initialState };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        0
+      ],
+      "id": "47f53424-6028-4a3f-af03-ab1dcbbd1000",
+      "name": "Set Session State"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1072,
+        0
+      ],
+      "id": "4fd79f44-3b57-48de-9ad5-0abfb3dc4917",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"# ROLE\\nYou are the Master Character Designer for a manga visual novel. You run ONCE to establish complete profiles for the protagonist and key supporting characters.\\n\\n# INPUT\\n- User's Protagonist Description: {{ $('Webhook').item.json.body.character_decision }}\\n- Story Theme: {{ $('Webhook').item.json.body.user_prompt }}\\n\\n# YOUR TASK\\nCreate a comprehensive profile for the **Protagonist** and invent two more essential characters (e.g., a **Cynical Partner** or a **Shadowy Antagonist**) that fit the story theme and protagonist's personality.\\n\\n# OUTPUT FORMAT (JSON)\\n{\\n  \\\"characters\\\": [\\n    {\\n      \\\"role\\\": \\\"Protagonist\\\",\\n      \\\"name\\\": \\\"Determined by agent or inherited from user\\\",\\n      \\\"personality\\\": {\\n        \\\"traits\\\": [\\\"...\\\"],\\n        \\\"motivation\\\": \\\"...\\\",\\n        \\\"flaws\\\": \\\"...\\\",\\n        \\\"voice\\\": \\\"...\\\"\\n      },\\n      \\\"design\\\": {\\n        \\\"visual_description\\\": \\\"Detailed description for image consistency\\\",\\n        \\\"distinctive_features\\\": \\\"...\\\",\\n        \\\"color_palette\\\": \\\"...\\\",\\n        \\\"reference_tags\\\": \\\"...\\\"\\n      },\\n      \\\"character_tasks\\\": {\\n        \\\"combat_ability\\\": \\\"...\\\",\\n        \\\"special_abilities\\\": [\\\"...\\\"],\\n        \\\"social_role\\\": \\\"Protagonist's role\\\",\\n        \\\"narrative_function\\\": \\\"Hero archetype\\\"\\n      }\\n    },\\n    {\\n      \\\"role\\\": \\\"Secondary Character (e.g., Partner or Antagonist)\\\",\\n      \\\"name\\\": \\\"...\\\",\\n      \\\"personality\\\": { /* ... */ },\\n      \\\"design\\\": { /* ... */ },\\n      \\\"character_tasks\\\": { /* ... */ }\\n    }\\n    // ... Include a third character object here ...\\n  ],\\n  \\\"protagonist_name\\\": \\\"Name of the lead character generated above\\\"\\n}\\n\\n# DESIGN REQUIREMENTS\\n- Visual descriptions must be detailed for consistent Stable Diffusion image generation.\\n- Ensure each character's design and personality contrasts with the protagonist to enrich the story.\\n- Provide specific tags optimized for Stable Diffusion (seinen, noir, etc.) for each character.\\n\\n# PERSONALITY REQUIREMENTS\\n- Make all characters compelling and three-dimensional with clear motivations and flaws.\\n\\nThis collection of profiles will be the definitive source for all character actions, dialogue, and visuals throughout the story.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.8,\n    \"response_mime_type\": \"application/json\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        -240
+      ],
+      "id": "1c13f8f3-42d4-4287-8972-95e83f2f1b14",
+      "name": "Characters Agent",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9HJcaRQ7pXXIVLH3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# INPUT CONTEXT\n- Story Theme: {{ $('Webhook').item.json.body.user_prompt }}\n- Character Descriptions List: {{ $('Webhook').item.json.body.character_inputs }}\n // Assumed to be a clean, joined string from a preceding Code Node\n\n# YOUR TASK\nFor every character described in the 'Character Descriptions List', generate a complete profile. **The first character in the list MUST be designated as the Protagonist.** Adhere strictly to the JSON OUTPUT FORMAT provided in the System Instructions."
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {
+          "systemMessage": "=# ROLE\nYou are the Master Character Designer for a manga visual novel. Your job is to create a complete profile for EVERY character described in the input list.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"characters\": [\n    {\n      \"role\": \"Protagonist\", // Must be the first character from the user list\n      \"name\": \"Determined by agent or inherited from user\",\n      \"personality\": {\n        \"traits\": [\"...\", \"...\"],\n        \"motivation\": \"...\",\n        \"flaws\": \"...\",\n        \"voice\": \"...\"\n      },\n      \"design\": {\n        \"visual_description\": \"Detailed description for consistent image generation (clothing, age, hair, features)\",\n        \"distinctive_features\": \"Physical marks or objects for identification (e.g., Scar above left eye, worn trench coat)\",\n        \"color_palette\": \"grays, blacks, muted blues\",\n        \"reference_tags\": \"seinen protagonist, noir detective, realistic proportions\"\n      },\n      \"character_tasks\": {\n        \"combat_ability\": \"...\",\n        \"special_abilities\": [\"...\", \"...\"],\n        \"social_role\": \"...\",\n        \"narrative_function\": \"...\"\n      }\n    }\n    // You MUST include a profile object for every character on the input list.\n  ],\n  \"protagonist_name\": \"Name of the lead character generated above\"\n}\n\n# DESIGN AND PERSONALITY REQUIREMENTS\n1.  **Consistency:** Visual descriptions must be detailed enough for consistent image generation (Stable Diffusion). Include clothing, hair, age, and build.\n2.  **Contrast:** Ensure supporting characters' designs and personalities contrast with the protagonist to drive narrative tension.\n3.  **Depth:** All characters must have clear motivations and at least one meaningful flaw.\n4.  **Tagging:** Provide detailed visual tags in `reference_tags` optimized for a black-and-white manga art style."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        432,
+        128
+      ],
+      "id": "bfe43d70-d3fe-4ed0-a7ec-0ba553cf264f",
+      "name": "Characters Agent2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9HJcaRQ7pXXIVLH3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# INPUT\n- User's Story Theme: {{ $json.body.user_prompt }}\n- Character Descriptions (List of all key characters): {{ $json.body.character_inputs }}\n// Note: This expression passes the raw array. Gemini is usually smart enough to read it, but if it fails, insert a Code Node before this to use .join('\\n- ') on the array.\n\n# YOUR TASK\nCreate a VAGUE narrative framework that will guide the story's development. This framework MUST establish themes and potential plot points related to the provided characters, such as relationships, conflicting motivations, and shared goals/betrayals. Adhere strictly to the JSON OUTPUT FORMAT provided in the System Instructions."
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {
+          "systemMessage": "=# ROLE\nYou are the Narrative Director for an AI manga visual novel. You provide HIGH-LEVEL guidance and ensure story coherence for an ensemble cast. You do NOT create detailed scenes.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"system_prompt\": \"The overarching narrative voice and world rules, designed to accommodate multiple key characters.\",\n  \"narrative_arc\": {\n    \"opening_intent\": \"What should the story establish initially, including the protagonist's relationship with the other key characters?\",\n    \"rising_action_themes\": [\"theme1\", \"theme2\", \"theme3\", \"trust vs. suspicion\", \"team cohesion vs. internal conflict\"],\n    \"potential_climax_directions\": [\"possible climax 1\", \"possible climax 2\", \"a choice involving the loyalty of a partner\"],\n    \"resolution_guidance\": \"How should endings reflect user choices about morality AND key character relationships?\"\n  },\n  \"manga_metadata\": {\n    \"genre\": \"...\",\n    \"art_style\": \"...\",\n    \"tone\": \"...\"\n  },\n  \"inventory\": {},\n  \"scene_tracker\": {\n    \"current_scene\": 1,\n    \"decision_count\": 0,\n    \"story_phase\": \"opening\"\n  }\n}\n\n# KEY PRINCIPLES\n1. **Focus on Dynamics:** Ensure the narrative framework leaves room for strong interactions between the characters described by the user.\n2. **Vague > Specific:** Provide thematic direction, not plot points.\n3. **Thematic:** Focus on emotional arcs, character development, and interpersonal conflict."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        144,
+        0
+      ],
+      "id": "2010d496-0439-4fe8-ba29-ba68eebede1a",
+      "name": "Manager Agent1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9HJcaRQ7pXXIVLH3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Manager Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manager Agent": {
+      "main": [
+        [
+          {
+            "node": "Characters Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Session State": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Characters Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Manager Agent1": {
+      "main": [
+        [
+          {
+            "node": "Characters Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Characters Agent2": {
+      "main": [
+        [
+          {
+            "node": "Set Session State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "407befa8-e644-4d06-9c21-2ff22380e992",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18b5943ece4887f041a24a18a504200de4e3b11ccd257d7213c00eb8dad60b65"
+  },
+  "id": "vbnNnB10yfIj3xZc",
+  "tags": []
+}

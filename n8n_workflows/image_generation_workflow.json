@@ -1,0 +1,341 @@
+{
+  "name": "KhornyKhormics",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-scene-images",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -320,
+        -64
+      ],
+      "id": "774ace1b-1a21-4d26-8971-6ce3be1132df",
+      "name": "Webhook",
+      "webhookId": "cefe1c3c-9535-41e1-b2e4-a74d079d626b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract data from the payload\nconst payload = $input.first().json;\n\n// Access the scene_story object\nconst sceneStory = payload.scene_story;\n\n// Get session and scene metadata\nconst sessionId = sceneStory.session_id;\nconst sceneNumber = sceneStory.scene_number;\n\n// Extract all subscreens and map them to the format needed for image generation\nconst subScenes = sceneStory.subscreen_details.map(subscreen => {\n  // Extract character names (keys from character_context object)\n  const characterNames = Object.keys(subscreen.character_context).join(', ');\n  \n  // Extract character details (if you need full context)\n  const characterDetails = Object.values(subscreen.character_context)\n    .map(char => char.visual_description)\n    .join('; ');\n  \n  // Build visual metadata string\n  const visualMetadata = [\n    subscreen.visual_metadata.bg_jpg,\n    subscreen.visual_metadata.overall_mood,\n    subscreen.visual_metadata.art_style,\n    subscreen.visual_metadata.time_of_day,\n    subscreen.visual_metadata.weather\n  ].join(',');\n  \n  return {\n    panel_id: subscreen.panel_id,\n    narrative_script: sceneStory.narrative_text,\n    sub_scene_description: subscreen.subscreen_script,\n    character_context: subscreen.character_context, // Full context object\n    visual_metadata: visualMetadata,\n  };\n});\n\n// Return as array of items for n8n to process\nreturn subScenes.map(scene => ({ json: scene }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        -64
+      ],
+      "id": "fd19d17d-5885-4701-b9d2-0f77004185e5",
+      "name": "Parse Sub-Scene Array"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# ROLE\nYou are a Prompt Generator for manga-style image generation using Google's Nano Banana.\n\n# TASK\nConvert the sub-scene description into an optimized prompt for black and white manga art styled Visual Novel Sub-Scene.\n\n# INPUT DATA\n- Overall Script: {{$json.narrative_script}}\n- Sub-Scene Description: {{$json.sub_scene_description}}\n- Characters Involved: {{$json.character_context.keys()}}\n- Sub-Scene Visual Metadata: {{$json.visual_metadata}}\n- Panel ID: {{$json.panel_id}}\n\n# INSTRUCTIONS\nCreate a complete prompt that includes:\n1. Medium specification: \"manga panel, black and white ink\"\n2. Environment details from the sub-scene description\n3. Character appearance (if character is visible in the scene)\n4. Lighting and atmosphere based on mood\n5. Manga style keywords: \"seinen style, detailed linework, professional manga art, screen tones, high contrast\"\n\n# PROMPT STRUCTURE\nFormat: [medium] + [environment] + [character if present] + [lighting/mood] + [style keywords]\n\n# Example Sub-Scene final_prompt\nMedium shot of underground subway platform at midnight. Cracked concrete floor with puddles reflecting flickering fluorescent lights overhead. Graffiti-covered walls with peeling advertisements. Train tracks disappearing into dark tunnel on the right side. Platform completely empty except for a lone bench with scattered newspapers. Ventilation grates emitting wisps of steam. Harsh overhead lighting creates dramatic pools of light alternating with deep shadow zones. The atmosphere feels abandoned and claustrophobic. Yuki stands near the platform edge, looking down the tunnel, one hand gripping a phone displaying a glowing message. Behind them, Riku leans against a concrete pillar, arms crossed, watching carefully. The composition emphasizes the isolation of the space and the tension between the two figures. Industrial pipes run along the ceiling. A single security camera hangs broken from its mount. Warning signs in Japanese are barely visible through shadow. The lighting creates strong contrast between illuminated zones and pitch-black corners.\n\n# OUTPUT FORMAT\nRespond with a JSON object with these exact keys:\n{\n  \"final_prompt\": \"your generated prompt here (250-300 Words)\",\n  \"negative_prompt\": \"color, colored, realistic photograph, 3d render, blurry, low quality, watermark, text, speech bubbles, multiple panels\"\n}\n\nGenerate the prompt now.\n"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        368,
+        -496
+      ],
+      "id": "809354e7-ad55-4cb7-98d6-6767e1594566",
+      "name": "Sub-Scene Prompt Generation",
+      "retryOnFail": false,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "HiP7yfx81tHMGHy6",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-image",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
+        },
+        "prompt": "=**System Prompt**\nYou are a prompt generator for manga-style image generation. You convert scene descriptions into optimized prompts for black and white manga art.\n\nAlways structure prompts as:\n[medium] + [environment] + [character if present] + [lighting/mood] + [manga style keywords]\n\nAlways start with: \"manga panel, black and white ink\"\nAlways end with: \"seinen style, detailed linework, professional manga art, screen tones, high contrast\"\n\nStandard negative prompt: \"color, colored, realistic photograph, 3d render, blurry, low quality, watermark, text, speech bubbles, multiple panels\"\n\nPanel to generate:\nScene details:\n{{ $json.candidates[0].content.parts[0].text.parseJson().final_prompt}}\n\nCharacter Designs:\n{{ JSON.stringify($('Process 5 Panels in Parallel').item.json.character_context) }}\n\nVisual Metadatas:\n{{ $('Process 5 Panels in Parallel').item.json.visual_metadata }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -496
+      ],
+      "id": "5fa3c6c1-4316-4507-9b9b-b80d85b302de",
+      "name": "Generate an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "HiP7yfx81tHMGHy6",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        112,
+        -64
+      ],
+      "id": "ba0474e1-12bf-45f0-abda-879f190304a2",
+      "name": "Process 5 Panels in Parallel"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {}
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        496,
+        -176
+      ],
+      "id": "d6c6a6d7-f79e-4302-a9d4-a2870ce80e1c",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "HiP7yfx81tHMGHy6",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "scene_story": {
+            "scene_number": 1,
+            "session_id": 12345,
+            "narrative_text": "The city never truly sleeps, but for Kaito, its constant, suffocating hum is a stark reminder of his waking nightmare. He perches precariously on the edge of a forgotten rooftop, the chill night air biting at his exposed skin. Below, the sprawling urban decay unfolds – a labyrinth of flickering neon and impenetrable shadows that swallow the weak, the forgotten. Each breath is a phantom ache in his chest, a chilling echo of what he lost. His family… gone. Vanished into the maw of \"The Syndicate.\"\n\nA worn photograph, creased from countless touches, is clutched in his scarred hand. A faded smile, a warm embrace, a life stolen. The faces blur, but the pain remains sharp, a constant fire in his gut. Justice, he calls it. Others might call it obsession. But what else is left when everything else is stripped away? He watches the city, not as a resident, but as a predator studying its prey, searching for any sign, any weakness in the towering, faceless enemy that took his world. His sharp eyes scan the dark alleys and high-rise windows, a silent promise echoing in the urban din: *I will find them.*",
+            "dialogue_blocks": [],
+            "user_interaction": {
+              "prompt_text": "The city offers countless paths, each shrouded in its own secrets and dangers. What corner of this shadowed world calls to you tonight, Kaito?",
+              "mcq_choices": [
+                {
+                  "choice_id": "1a",
+                  "text": "Venture into the bustling market district, hoping to gather whispers and intel."
+                },
+                {
+                  "choice_id": "1b",
+                  "text": "Retreat to your hidden den, to analyze scraps of information you've already found."
+                }
+              ],
+              "accepts_custom_input": true
+            },
+            "subscreen_details": [
+              {
+                "panel_id": 1,
+                "subscreen_script": "Wide establishing shot: Rain-soaked apartment interior at night. Large window showing blurred city lights through water droplets. Dark, moody atmosphere. Detective's desk in foreground covered with scattered case files and evidence photos. Single desk lamp provides harsh, concentrated lighting. Noir aesthetic with high contrast shadows.",
+                "character_context": {
+                  "Kaito Nakamura": {
+                    "visual_description": "Male, early 30s, disheveled black hair, tired eyes with dark circles, worn gray trench coat over black shirt, scar above left eyebrow",
+                    "current_emotional_state": "suspicious, conflicted, isolated",
+                    "current_action": "investigating evidence alone in apartment"
+                  }
+                },
+                "visual_metadata": {
+                  "bg_jpg": "bg_apartment.jpg",
+                  "overall_mood": "tense, noir, supernatural",
+                  "art_style": "seinen, detailed backgrounds, high contrast",
+                  "time_of_day": "night",
+                  "weather": "heavy rain"
+                },
+                "session_id": "uuid-12345",
+                "scene_number": 3
+              },
+              {
+                "panel_id": 2,
+                "subscreen_script": "Medium shot: Protagonist's hands spreading out evidence photographs on the desk. Visible details of crime scene photos showing supernatural symbols. Coffee cup and ashtray nearby. Tense body language conveyed through hand positioning. Focus on the physical evidence and character's investigation process.",
+                "character_context": {
+                  "Kaito Nakamura": {
+                    "visual_description": "Male, early 30s, disheveled black hair, tired eyes with dark circles, worn gray trench coat over black shirt, scar above left eyebrow",
+                    "current_emotional_state": "suspicious, conflicted, isolated",
+                    "current_action": "investigating evidence alone in apartment"
+                  }
+                },
+                "visual_metadata": {
+                  "bg_jpg": "bg_apartment.jpg",
+                  "overall_mood": "tense, noir, supernatural",
+                  "art_style": "seinen, detailed backgrounds, high contrast",
+                  "time_of_day": "night",
+                  "weather": "heavy rain"
+                },
+                "session_id": "uuid-12345",
+                "scene_number": 3
+              },
+              {
+                "panel_id": 3,
+                "subscreen_script": "Close-up: Protagonist's face illuminated by phone screen glow in otherwise dark room. Eyes narrowed with suspicion and conflict. Tired, weathered features showing internal struggle. Screen light creates dramatic side-lighting. Expression captures distrust mixed with concern. Manga-style emphasis on emotional intensity through detailed eye work.",
+                "character_context": {
+                  "Kaito Nakamura": {
+                    "visual_description": "Male, early 30s, disheveled black hair, tired eyes with dark circles, worn gray trench coat over black shirt, scar above left eyebrow",
+                    "current_emotional_state": "suspicious, conflicted, isolated",
+                    "current_action": "investigating evidence alone in apartment"
+                  }
+                },
+                "visual_metadata": {
+                  "bg_jpg": "bg_apartment.jpg",
+                  "overall_mood": "tense, noir, supernatural",
+                  "art_style": "seinen, detailed backgrounds, high contrast",
+                  "time_of_day": "night",
+                  "weather": "heavy rain"
+                },
+                "session_id": "uuid-12345",
+                "scene_number": 3
+              },
+              {
+                "panel_id": 4,
+                "subscreen_script": "Over-shoulder shot: View of phone screen showing partner's concerned face during video call. Background shows protagonist's silhouette. Composition creates distance and separation between characters. Partner's expression shows worry and urgency. Visual metaphor for communication barrier and trust issues.",
+                "character_context": {
+                  "Kaito Nakamura": {
+                    "visual_description": "Male, early 30s, disheveled black hair, tired eyes with dark circles, worn gray trench coat over black shirt, scar above left eyebrow",
+                    "current_emotional_state": "suspicious, conflicted, isolated",
+                    "current_action": "investigating evidence alone in apartment"
+                  }
+                },
+                "visual_metadata": {
+                  "bg_jpg": "bg_apartment.jpg",
+                  "overall_mood": "tense, noir, supernatural",
+                  "art_style": "seinen, detailed backgrounds, high contrast",
+                  "time_of_day": "night",
+                  "weather": "heavy rain"
+                },
+                "session_id": "uuid-12345",
+                "scene_number": 3
+              },
+              {
+                "panel_id": 5,
+                "subscreen_script": "Dramatic close-up: Protagonist's hand hovering over a glowing evidence file that emanates supernatural energy (depicted through visual effects like swirling lines or aura). Decision moment frozen in time. Tense composition suggesting pivotal choice. High contrast lighting emphasizing the weight of the moment. Cliffhanger panel style.",
+                "character_context": {
+                  "Kaito Nakamura": {
+                    "visual_description": "Male, early 30s, disheveled black hair, tired eyes with dark circles, worn gray trench coat over black shirt, scar above left eyebrow",
+                    "current_emotional_state": "suspicious, conflicted, isolated",
+                    "current_action": "investigating evidence alone in apartment"
+                  }
+                },
+                "visual_metadata": {
+                  "bg_jpg": "bg_apartment.jpg",
+                  "overall_mood": "tense, noir, supernatural",
+                  "art_style": "seinen, detailed backgrounds, high contrast",
+                  "time_of_day": "night",
+                  "weather": "heavy rain"
+                },
+                "session_id": "uuid-12345",
+                "scene_number": 3
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Sub-Scene Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Sub-Scene Array": {
+      "main": [
+        [
+          {
+            "node": "Process 5 Panels in Parallel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sub-Scene Prompt Generation": {
+      "main": [
+        [
+          {
+            "node": "Generate an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate an image": {
+      "main": [
+        []
+      ]
+    },
+    "Process 5 Panels in Parallel": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Sub-Scene Prompt Generation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0cb15dd7-4f63-4324-a31b-b65d8a9118f8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "51a02c8b44eb9298342109f439add9334816f45329451b96292436de542a582b"
+  },
+  "id": "DKLOkQGMl6WJIAaC",
+  "tags": []
+}

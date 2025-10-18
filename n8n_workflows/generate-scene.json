@@ -1,0 +1,180 @@
+{
+  "name": "generate-scene",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-scene",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5b70f823-ce14-4833-b8cc-919c6f60d363",
+      "name": "Webhook",
+      "webhookId": "14723948-8ff9-4abb-a450-57d911ff5ccf"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1376,
+        0
+      ],
+      "id": "04cd842b-38bd-4e8f-b2ba-64528a2fdfd7",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\n// --- 1. Calculate Latest User Decision ---\n// This handles both Scene 1 (empty array) and subsequent scenes.\n\nconst last_user_decision = $input.first().json.body.overall_story.scene_tracker.decision_count > 0 \n    ? input.decision_history.slice(-1)[0] // Gets the last item in the array\n    : 'NO_PREVIOUS_DECISION'; // Placeholder for Scene 1\n\n// --- 2. Extract Previous Scene Context ---\n// The initial JSON doesn't include previous_scene_story. \n// We add a fallback in case Streamlit doesn't send it yet.\nconst previous_scene_summary = input.previous_scene_story \n    ? input.previous_scene_story \n    : 'Scene 0: Story has just begun.';\n\n// --- 3. Assemble Clean Context Object for the Storyteller Agent ---\nconst prepared_context = {    \n    // Create clean, easy-to-reference variables for the prompt:\n    overall_story: $input.first().json.body.overall_story,\n    character_profile: $input.first().json.body.character_profile,\n    last_decision: last_user_decision,\n    previous_scene_summary: previous_scene_summary,\n    \n    // Directly pull current scene number and phase from the tracker\n    current_scene_number: $input.first().json.body.current_scene,\n    current_story_phase: $input.first().json.body.phase,\n\n    // This is the full history, useful for the final scene\n    full_decision_history: $input.first().json.body.decision_history, \n};\n\nreturn [{ json: prepared_context }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        0
+      ],
+      "id": "6f1d779d-2152-49f9-8e50-a4170d20e20f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# INPUTS\n- Manager's Story Framework: {{ $json.overall_story }}\n- Character Profile: {{ $json.character_profile }}\n\n# ITERATIVE STATE\n- Current Scene Number (From Session): {{ $json.current_scene_number }}\n- Session ID: {{ $('Webhook').item.json.body.session_id }}\n- Story Phase: {{ $json.current_story_phase }}\n- User's Previous Input/Decision: {{ $json.last_decision }}\n- Previous Scene Summary (Context): {{ $json.previous_scene_summary }}\n- Full Decision History: {{ $json.full_decision_history }}\n\n# ACTION: GENERATE SCENE AND METADATA\n1. Create the complete scene content, strictly following the JSON format provided in the System Instructions.\n2. **CRITICAL:** Ensure the final JSON object includes the following fields, using the exact values provided in the ITERATIVE STATE section above:\n    - **\"session_id\"** must be included.\n    - **\"scene_number\"** must match the 'Current Scene Number' from the session.\n    - **\"narrative_text\"** must be written in the voice of the Character Profile.\n3. Ensure continuity by adapting the narrative based on the 'User's Previous Input/Decision'. If the decision is 'NO_PREVIOUS_DECISION', begin with the Opening Intent from the Framework.",
+              "role": "=user"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {
+          "systemMessage": "=# ROLE\nYou are the Scene Storyteller bringing the manga narrative to life based on the Manager Agent's intent and the user's choices. Your output must be used directly by the frontend, so you must adhere STRICTLY to the JSON output format provided below.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"scene_story\": {\n    \"scene_number\": 1,\n    \"session_id\": \"uuid-12345\", \n    \"narrative_text\": \"2-3 dynamic paragraphs of story text (150-200 words) written in present tense manga style, fully incorporating the protagonist's internal monologue and psychic perceptions.\",\n    \"dialogue_blocks\": [\n      {\"speaker\": \"Protagonist/Kaito\", \"text\": \"Dialogue text...\"},\n      {\"speaker\": \"NPC Name\", \"text\": \"Dialogue text...\"}\n    ],\n    \"user_interaction\": {\n      \"prompt_text\": \"The core dramatic question the user faces.\",\n      \"mcq_choices\": [\n        {\"choice_id\": \"1a\", \"text\": \"Choice Text A\"}\n      ],\n      \"accepts_custom_input\": true\n    },\n    \"subscreen_details\": [\n      {\n        \"panel_id\": 1,\n        \"subscreen_script\": \"Detailed visual beat for image generation (Wide shot establishing the setting).\",\n        // *** MODIFIED FIELD FOR MULTIPLE CHARACTERS ***\n        \"character_context\": {\n          \"Kaito Tanaka\": {\n            \"visual_role\": \"Protagonist\",\n            \"current_emotional_state\": \"tense, noir\",\n            \"current_action\": \"Describe the character's key action in the panel.\"\n          },\n          \"Sato (Partner)\": {\n            \"visual_role\": \"Supporting Character\",\n            \"current_emotional_state\": \"confused, concerned\",\n            \"current_action\": \"Sato is looking at Kaito with suspicion.\"\n          }\n          // Include ALL characters visible in this specific panel.\n        },\n        \"visual_metadata\": {\n          \"bg_jpg\": \"Select from available list: bg_city_night.jpg, bg_city_day.jpg, bg_apartment.jpg, bg_office.jpg, bg_street.jpg, bg_park.jpg, bg_subway.jpg, bg_rooftop.jpg\",\n          \"overall_mood\": \"tense, noir, supernatural\",\n          \"art_style\": \"seinen, detailed backgrounds, high contrast\",\n          \"time_of_day\": \"night\",\n          \"weather\": \"heavy rain\"\n        }\n      }\n      // You must generate exactly 5 objects in this 'subscreen_details' array.\n    ],\n    \"scene_summary\": \"2-3 sentence summary for Manager Agent's next iteration.\"\n  }\n}\n\n# WRITING GUIDELINES\n1.  **Core Objective:** Fulfill the intent and feel provided by the Manager's framework.\n2.  **Visual Generation:** You must generate **exactly 5 objects** in the `subscreen_details` array.\n3.  **Multi-Character Context (CRITICAL):** For every panel in `subscreen_details`, the `character_context` field MUST contain a separate nested object for **every character visible in that panel**, keyed by their Name/Role (e.g., `\"Kaito Tanaka\": {...}`). Do NOT include the full `visual_description` here; just their role, emotion, and action.\n4.  **Dialogue & Consistency:** Use the provided Character Profiles for all dialogue and actions, maintaining their unique voices and flaws.\n5.  **Metadata:** The values for `scene_number` and `session_id` must be echoed back from the User's input context into the final JSON.\n6.  **RESOLUTION PHASE:** If the 'Story Phase' is 'resolution', set `mcq_choices` to an empty array `[]`."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        368,
+        0
+      ],
+      "id": "3267ac0a-b499-49ed-9743-53e37131a41c",
+      "name": "Storyteller Agent",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9HJcaRQ7pXXIVLH3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node runs after the image generation loop and the scene extraction step.\n// We assume 'generated_scene' holds the entire output from the Storyteller Agent.\n\nconst incomingSession = $('Webhook').first().json.body; // The context received at the start of the workflow\nconst generatedScene = $('Generated Scene').first().json; // The clean scene_story output\n\n\n// --- 1. Update Iterative Trackers ---\nconst nextSceneNumber = $input.first().json.scene_number + 1;\nconst newDecisionCount = $('Code in JavaScript').first().json.overall_story.scene_tracker.decision_count + 1; // Assuming a decision was just made\nconst nextPhase = $('Code in JavaScript').first().json.overall_story.scene_tracker.story_phase; // Manager Agent will adjust this next round\n\n// --- 2. Update Scene History ---\n// Create the historical record for the scene just completed\nconst newHistoryEntry = {\n    scene_number: $input.first().json.scene_number,\n    summary: $input.first().json.scene_summary,\n    user_decision_made: $('Code in JavaScript').first().json.last_decision // The decision that triggered this scene\n};\n\n// --- 3. Assemble the NEW State for Streamlit to Save ---\nconst updatedSessionState = {\n    // Preserve ALL foundational data\n    session_id: $input.first().json.session_id,\n    user_prompt: $('Webhook').first().json.body.user_prompt,\n    overall_story: $('Webhook').first().json.body.overall_story,\n    characters: $('Webhook').first().json.body.character_profile.characters,\n    protagonist_name: $('Webhook').first().json.body.character_profile.characters[0].name,\n    \n    // Update Tracking Data\n    current_scene: nextSceneNumber,\n    decision_count: newDecisionCount,\n    story_phase: nextPhase,\n    is_complete: $('Webhook').first().json.body.is_complete || false, // Assuming Storyteller sets this if in resolution phase\n    \n    // Update History Arrays\n    decision_history: [...$('Code in JavaScript').first().json.full_decision_history, $('Code in JavaScript').first().json.last_decision], // Add the decision just made\n    scene_history: [...($('Code in JavaScript').first().json.full_decision_history || []), newHistoryEntry], // Add the summary of the completed scene\n\n    // The current scene output (what Streamlit renders immediately)\n    last_generated_scene_data: generatedScene \n};\n\n// --- 4. Assemble the Webhook Response ---\n// Streamlit only needs the current scene data and confirmation, \n// but saving the full session state makes the frontend simpler.\n// For the Webhook Response, we pass the data Streamlit needs to render.\nconst finalResponseToStreamlit = {\n    status: 'scene_complete',\n    session_data_to_save: updatedSessionState, // Streamlit saves THIS object\n    render_scene: { // Streamlit renders THIS object\n        narrative: generatedScene.narrative_text,\n        dialogue: generatedScene.dialogue_blocks,\n        choices: generatedScene.user_interaction.mcq_choices,\n        panels: generatedScene.subscreen_details, // Or the URLs generated later\n        bg_jpg: generatedScene.subscreen_details[0].visual_metadata.bg_jpg\n    }\n};\n\nreturn [{ json: finalResponseToStreamlit }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        0
+      ],
+      "id": "9a54180c-1dd4-4f03-ae72-c9dc6bf40dd0",
+      "name": "Final Session State"
+    },
+    {
+      "parameters": {
+        "jsCode": "// This function extracts the nested JSON string from the Storyteller Agent's output\n// and parses it into a clean JavaScript object.\n\nconst inputItem = $input.first().json;\n\n// 1. Locate and extract the raw JSON string generated by the LLM.\n// This path is standard for a successful Gemini 'Message a model' response.\nconst rawJsonString = inputItem.candidates[0].content.parts[0].text;\n\nlet parsedData;\ntry {\n    // 2. Parse the string into a JavaScript object.\n    parsedData = JSON.parse(rawJsonString);\n} catch (e) {\n    // CRITICAL Error Handling: Log the failure and stop the workflow if JSON is malformed.\n    console.error(\"Failed to parse Storyteller Agent's JSON output:\", rawJsonString);\n    throw new Error(\"Storyteller Agent returned malformed JSON. Check the LLM output for syntax errors. Error: \" + e.message);\n}\n\n// 3. Extract the clean 'scene_story' object.\n// The LLM was instructed to wrap everything inside {\"scene_story\": {...}}\nconst finalSceneStory = parsedData.scene_story;\n\n// 4. Return the clean, complete scene_story object.\n// This single item is now ready for the image pipeline and final assembly.\nreturn [\n    {\n        json: finalSceneStory\n    }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "d6302ad1-c249-4b2e-b15e-9aa831087dc8",
+      "name": "Generated Scene"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Storyteller Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Storyteller Agent": {
+      "main": [
+        [
+          {
+            "node": "Generated Scene",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Session State": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generated Scene": {
+      "main": [
+        [
+          {
+            "node": "Final Session State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "384254ec-8d87-4a32-b523-39503293ad7f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18b5943ece4887f041a24a18a504200de4e3b11ccd257d7213c00eb8dad60b65"
+  },
+  "id": "vlJyDwLCTO2n3Ozy",
+  "tags": []
+}
