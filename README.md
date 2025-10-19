@@ -6,20 +6,20 @@ A multi-page Streamlit application for creating interactive manga-style visual n
 
 ## Technology Stack 🛠️
 Frontend:
-Streamlit 🌊 - Interactive web interface with multi-page navigation
-Python 3.13 🐍 - Core application logic
-requests 📡 - HTTP client for webhook communication
+- Streamlit 🌊: Interactive web interface with multi-page navigation
+- Python 3.13 🐍: Core application logic
+- AWS S3 📡: For storage of Nano Banana Images
 
 AI/ML Services (via n8n workflows):
-Google Gemini 2.5 Flash 🤖 - Advanced LLM for story planning, narrative generation, character development, and dialogue
-Nano Banana 🍌⚡ - High-speed image generation API for creating manga-style panel artwork in parallel (5 panels per scene)
-Agent-based architecture 🎭 - Specialized agents orchestrating characters, narrative, and visual generation
+- Google Gemini 2.5 Flash 🤖: Advanced LLM for story planning, narrative generation, character development, and dialogue
+- Nano Banana 🍌⚡: High-speed image generation API for creating manga-style panel artwork in parallel (5 panels per scene)
+- Agent-based architecture 🎭: Specialized agents orchestrating characters, narrative, and visual generation
 
 Tools/Backend/Orchestration:
-n8n 🔄 - Workflow automation platform orchestrating AI agents
-Webhooks 🪝 - RESTful API endpoints for story initialization and scene generation
-Cursor ⌨️ - Main IDE for streamlit dev
-Claude Code 🎯 - Main Dev AI Agent
+- n8n 🔄: Workflow automation platform orchestrating AI agents
+- Webhooks 🪝: RESTful API endpoints for story initialization and scene generation
+- Cursor ⌨️: Main IDE for streamlit dev
+- Claude Code 🎯: Main Dev AI Agent
 
 ---
 
