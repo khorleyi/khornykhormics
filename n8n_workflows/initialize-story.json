@@ -40,13 +40,13 @@
       "credentials": {
         "googlePalmApi": {
           "id": "9HJcaRQ7pXXIVLH3",
-          "name": "Google Gemini(PaLM) Api account"
+          "name": "khorleyi@ottodot.com"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "// 1. MANAGER AGENT: Extract and Parse overall_story JSON string\n// Drag the 'text' field from the Manager Agent output (from the Webhook/Manager Agent node history)\nconst managerText = $('Manager Agent1').first().json.candidates[0].content.parts[0].text;\nconst overall_story = JSON.parse(managerText);\n\n// 2. CHARACTER AGENT: Extract and Parse character_profile JSON string\n// Drag the 'text' field from the current input (Character Agent output)\nconst characterText = $input.first().json.candidates[0].content.parts[0].text\n\n// We assume the agent output is a JSON string with a top-level \"character_profile\" key\nconst character_profile = JSON.parse(characterText);\n\n// 3. SESSION DATA: Retrieve initial Webhook data\n// Drag the session_id and user_prompt from the Webhook node output (from the Webhook node history)\nconst session_id = $('Webhook').first().json.body.session_id;\nconst user_prompt = $('Webhook').first().json.body.user_prompt;\n\n// 4. Assemble the final initial state object\nconst initialState = {\n    \"session_id\": session_id,\n    \"overall_story\": overall_story,\n    \"character_profile\": character_profile,\n    // Initial state for tracking:\n    \"current_scene\": 1,\n    \"decision_history\": [],\n  \"phase\": \"ready_for_scene_1\",\n    \"user_prompt\": user_prompt,\n    \"decision_count\": 0,\n    \"story_phase\": overall_story.scene_tracker.story_phase, // Retrieve current phase from LLM output\n    \"is_complete\": false  \n};\n\n// Return the final data structure to be sent to Streamlit\nreturn { json: initialState };"
+        "jsCode": "// --- Code Node: Set Session State ---\n\n// 1. MANAGER AGENT: Extract and Parse overall_story (No change needed here)\nconst managerText = $input.first().json.candidates[0].content.parts[0].text;\nconst overall_story = $('Manager Agent1').first().json.candidates[0].content.parts[0].text;\n\n// 2. CHARACTER AGENT: Extract and Parse character data\nconst characterText = $input.first().json.candidates[0].content.parts[0].text;\nconst characterData = JSON.parse(characterText); // The parsed object contains characters and protagonist_name\n\n// --- FIX: EXTRACT NESTED DATA AND USE PROPER KEYS ---\nconst charactersArray = characterData.characters;\nconst protagonistName = characterData.protagonist_name;\n\n// 3. SESSION DATA: Retrieve initial Webhook data\nconst session_id = $('Webhook').first().json.body.session_id;\nconst user_prompt = $('Webhook').first().json.body.user_prompt;\n\n// 4. Assemble the final initial state object\nconst initialState = {\n    \"session_id\": session_id,\n    \"user_prompt\": user_prompt, // Promote user_prompt to the top level\n    \n    // LLM Planning Data (Clean, non-redundant structure)\n    \"overall_story\": overall_story,\n    \"characters\": charactersArray,      // Promoted the clean array\n    \"protagonist_name\": protagonistName, // Promoted the name\n    \n    // Initial state for tracking:\n    \"current_scene\": 1,\n    \"decision_history\": [],\n    \"phase\": \"ready_for_scene_1\",\n    \"decision_count\": 0,\n    \"story_phase\": \"opening\",\n    \"is_complete\": false\n};\n\n// Return the final data structure to be sent to Streamlit\nreturn [{ json: initialState }];\n\n// Note: I replaced the shorthand $('NodeName') with the robust n8n.getNode('Node Name').getData(0).json \n// syntax for stability, assuming your node names are correct."
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -92,7 +92,7 @@
       "credentials": {
         "googlePalmApi": {
           "id": "9HJcaRQ7pXXIVLH3",
-          "name": "Google Gemini(PaLM) Api account"
+          "name": "khorleyi@ottodot.com"
         }
       }
     },
@@ -114,7 +114,7 @@
         "simplify": false,
         "jsonOutput": true,
         "options": {
-          "systemMessage": "=# ROLE\nYou are the Master Character Designer for a manga visual novel. Your job is to create a complete profile for EVERY character described in the input list.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"characters\": [\n    {\n      \"role\": \"Protagonist\", // Must be the first character from the user list\n      \"name\": \"Determined by agent or inherited from user\",\n      \"personality\": {\n        \"traits\": [\"...\", \"...\"],\n        \"motivation\": \"...\",\n        \"flaws\": \"...\",\n        \"voice\": \"...\"\n      },\n      \"design\": {\n        \"visual_description\": \"Detailed description for consistent image generation (clothing, age, hair, features)\",\n        \"distinctive_features\": \"Physical marks or objects for identification (e.g., Scar above left eye, worn trench coat)\",\n        \"color_palette\": \"grays, blacks, muted blues\",\n        \"reference_tags\": \"seinen protagonist, noir detective, realistic proportions\"\n      },\n      \"character_tasks\": {\n        \"combat_ability\": \"...\",\n        \"special_abilities\": [\"...\", \"...\"],\n        \"social_role\": \"...\",\n        \"narrative_function\": \"...\"\n      }\n    }\n    // You MUST include a profile object for every character on the input list.\n  ],\n  \"protagonist_name\": \"Name of the lead character generated above\"\n}\n\n# DESIGN AND PERSONALITY REQUIREMENTS\n1.  **Consistency:** Visual descriptions must be detailed enough for consistent image generation (Stable Diffusion). Include clothing, hair, age, and build.\n2.  **Contrast:** Ensure supporting characters' designs and personalities contrast with the protagonist to drive narrative tension.\n3.  **Depth:** All characters must have clear motivations and at least one meaningful flaw.\n4.  **Tagging:** Provide detailed visual tags in `reference_tags` optimized for a black-and-white manga art style."
+          "systemMessage": "=# ROLE\nYou are the Master Character Designer for a visual novel. Your job is to create a complete profile for EVERY character described in the input list.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"characters\": [\n    {\n      \"role\": \"Protagonist\", // Must be the first character from the user list\n      \"name\": \"Determined by agent or inherited from user\",\n      \"personality\": {\n        \"traits\": [\"...\", \"...\"],\n        \"motivation\": \"...\",\n        \"flaws\": \"...\",\n        \"voice\": \"...\"\n      },\n      \"design\": {\n        \"visual_description\": \"Detailed description for consistent image generation (clothing, age, hair, features)\",\n        \"distinctive_features\": \"Physical marks or objects for identification (e.g., Scar above left eye, worn trench coat)\",\n        \"color_palette\": \"vibrant blues, warm earth tones, rich colors appropriate to character\",\n        \"reference_tags\": \"detailed illustration, professional character design, realistic proportions\"\n      },\n      \"character_tasks\": {\n        \"combat_ability\": \"...\",\n        \"special_abilities\": [\"...\", \"...\"],\n        \"social_role\": \"...\",\n        \"narrative_function\": \"...\"\n      }\n    }\n    // You MUST include a profile object for every character on the input list.\n  ],\n  \"protagonist_name\": \"Name of the lead character generated above\"\n}\n\n# DESIGN AND PERSONALITY REQUIREMENTS\n1.  **Consistency:** Visual descriptions must be detailed enough for consistent image generation (Stable Diffusion). Include clothing, hair, age, and build.\n2.  **Contrast:** Ensure supporting characters' designs and personalities contrast with the protagonist to drive narrative tension.\n3.  **Depth:** All characters must have clear motivations and at least one meaningful flaw.\n4.  **Tagging:** Provide detailed visual tags in `reference_tags` optimized for full color illustration style."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
@@ -127,8 +127,8 @@
       "name": "Characters Agent2",
       "credentials": {
         "googlePalmApi": {
-          "id": "9HJcaRQ7pXXIVLH3",
-          "name": "Google Gemini(PaLM) Api account"
+          "id": "MGkDnEZ50RxlMm5H",
+          "name": "k.l.y.2612@gmail.com"
         }
       }
     },
@@ -150,7 +150,7 @@
         "simplify": false,
         "jsonOutput": true,
         "options": {
-          "systemMessage": "=# ROLE\nYou are the Narrative Director for an AI manga visual novel. You provide HIGH-LEVEL guidance and ensure story coherence for an ensemble cast. You do NOT create detailed scenes.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"system_prompt\": \"The overarching narrative voice and world rules, designed to accommodate multiple key characters.\",\n  \"narrative_arc\": {\n    \"opening_intent\": \"What should the story establish initially, including the protagonist's relationship with the other key characters?\",\n    \"rising_action_themes\": [\"theme1\", \"theme2\", \"theme3\", \"trust vs. suspicion\", \"team cohesion vs. internal conflict\"],\n    \"potential_climax_directions\": [\"possible climax 1\", \"possible climax 2\", \"a choice involving the loyalty of a partner\"],\n    \"resolution_guidance\": \"How should endings reflect user choices about morality AND key character relationships?\"\n  },\n  \"manga_metadata\": {\n    \"genre\": \"...\",\n    \"art_style\": \"...\",\n    \"tone\": \"...\"\n  },\n  \"inventory\": {},\n  \"scene_tracker\": {\n    \"current_scene\": 1,\n    \"decision_count\": 0,\n    \"story_phase\": \"opening\"\n  }\n}\n\n# KEY PRINCIPLES\n1. **Focus on Dynamics:** Ensure the narrative framework leaves room for strong interactions between the characters described by the user.\n2. **Vague > Specific:** Provide thematic direction, not plot points.\n3. **Thematic:** Focus on emotional arcs, character development, and interpersonal conflict."
+          "systemMessage": "=# ROLE\nYou are the Narrative Director for an AI visual novel. You provide HIGH-LEVEL guidance and ensure story coherence for an ensemble cast. You do NOT create detailed scenes.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"system_prompt\": \"The overarching narrative voice and world rules, designed to accommodate multiple key characters.\",\n  \"narrative_arc\": {\n    \"opening_intent\": \"What should the story establish initially, including the protagonist's relationship with the other key characters?\",\n    \"rising_action_themes\": [\"theme1\", \"theme2\", \"theme3\", \"trust vs. suspicion\", \"team cohesion vs. internal conflict\"],\n    \"potential_climax_directions\": [\"possible climax 1\", \"possible climax 2\", \"a choice involving the loyalty of a partner\"],\n    \"resolution_guidance\": \"How should endings reflect user choices about morality AND key character relationships?\"\n  },\n  \"visual_metadata\": {\n    \"genre\": \"...\",\n    \"art_style\": \"full color illustration, vibrant colors\",\n    \"tone\": \"adaptable to story context\"\n  },\n  \"inventory\": {},\n  \"scene_tracker\": {\n    \"current_scene\": 1,\n    \"decision_count\": 0,\n    \"story_phase\": \"opening\"\n  }\n}\n\n# KEY PRINCIPLES\n1. **Focus on Dynamics:** Ensure the narrative framework leaves room for strong interactions between the characters described by the user.\n2. **Vague > Specific:** Provide thematic direction, not plot points.\n3. **Thematic:** Focus on emotional arcs, character development, and interpersonal conflict."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.googleGemini",
@@ -163,13 +163,40 @@
       "name": "Manager Agent1",
       "credentials": {
         "googlePalmApi": {
-          "id": "9HJcaRQ7pXXIVLH3",
-          "name": "Google Gemini(PaLM) Api account"
+          "id": "MGkDnEZ50RxlMm5H",
+          "name": "k.l.y.2612@gmail.com"
         }
       }
     }
   ],
-  "pinData": {},
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "localhost:5678",
+            "user-agent": "python-requests/2.31.0",
+            "accept-encoding": "gzip, deflate",
+            "accept": "*/*",
+            "connection": "keep-alive",
+            "content-length": "116",
+            "content-type": "application/json"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "user_prompt": "hole in roof",
+            "character_inputs": [
+              "peter"
+            ],
+            "session_id": "704561ed-677d-4942-9535-2eb542946d52"
+          },
+          "webhookUrl": "http://localhost:5678/webhook/initialize-story",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
   "connections": {
     "Webhook": {
       "main": [
@@ -232,11 +259,13 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "versionId": "407befa8-e644-4d06-9c21-2ff22380e992",
+  "versionId": "78efc88b-4411-411a-ac23-e575e42d68be",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "18b5943ece4887f041a24a18a504200de4e3b11ccd257d7213c00eb8dad60b65"

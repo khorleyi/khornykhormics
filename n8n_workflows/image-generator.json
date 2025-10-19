@@ -1,0 +1,253 @@
+{
+  "name": "image-generator",
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# ROLE\nYou are a Prompt Generator for full color illustration generation using Google's Nano Banana.\n\n# TASK\nConvert the sub-scene description into an optimized prompt for vibrant, full color visual novel illustration.\n\n# INPUT DATA\n- Overall Scene Summary: {{ $json.overall_scene_summary }}\n- Sub-Screen Narrative: {{$json.narrative_script}}\n- Sub-Scene Description: {{$json.sub_scene_description}}\n- Characters Involved: {{$json.character_context.keys()}}\n- Sub-Scene Visual Metadata: {{$json.visual_metadata}}\n- Panel ID: {{$json.panel_id}}\n\n# INSTRUCTIONS\nCreate a complete prompt that includes:\n1. Medium specification: \"full color illustration, vibrant artwork\"\n2. Environment details from the sub-scene description\n3. Character appearance (if character is visible in the scene)\n4. Lighting and atmosphere based on mood\n5. Style keywords: \"detailed illustration, professional artwork, rich colors, high quality rendering\"\n\n# PROMPT STRUCTURE\nFormat: [medium] + [environment] + [character if present] + [lighting/mood] + [style keywords]\n\n\n# OUTPUT FORMAT\nRespond with a JSON object with these exact keys:\n{\n  \"final_prompt\": \"your generated prompt here (100-150 Words)\",\n  \"negative_prompt\": \"black and white, monochrome, realistic photograph, 3d render, blurry, low quality, watermark, text, speech bubbles, multiple panels\"\n}\n\nGenerate the prompt now.\n"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        0
+      ],
+      "id": "7a9899a5-e391-4073-a699-04646820d4c4",
+      "name": "Sub-Scene Prompt Generation5",
+      "retryOnFail": false,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "MGkDnEZ50RxlMm5H",
+          "name": "k.l.y.2612@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-image",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
+        },
+        "prompt": "=**System Prompt**\nYou are a prompt generator for full color illustration generation. You convert scene descriptions into optimized prompts for vibrant, colorful visual novel artwork.\n\nAlways structure prompts as:\n[medium] + [environment] + [character if present] + [lighting/mood] + [style keywords]\n\nAlways start with: \"full color illustration, vibrant artwork\"\nAlways end with: \"detailed illustration, professional artwork, rich colors, high quality rendering\"\n\nStandard negative prompt: \"black and white, monochrome, realistic photograph, 3d render, blurry, low quality, watermark, text, speech bubbles, multiple panels\"\n\nPanel to generate:\nScene details:\n{{$json.candidates[0].content.parts[0].text.parseJson().final_prompt}}\n\nCharacter Designs:\n{{ JSON.stringify($('Start').item.json.character_context) }}\n\nVisual Metadatas:\n{{ $('Start').item.json.visual_metadata }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        0
+      ],
+      "id": "f67593c6-1b33-4146-9bea-b960659f3bf9",
+      "name": "Sub-Scene Gen ",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "MGkDnEZ50RxlMm5H",
+          "name": "k.l.y.2612@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "panel_id",
+              "type": "number"
+            },
+            {
+              "name": "narrative_script"
+            },
+            {
+              "name": "sub_scene_description"
+            },
+            {
+              "name": "character_context",
+              "type": "object"
+            },
+            {
+              "name": "visual_metadata"
+            },
+            {
+              "name": "session_id"
+            },
+            {
+              "name": "screen_number",
+              "type": "number"
+            },
+            {
+              "name": "overall_scene_summary"
+            }
+          ]
+        }
+      },
+      "id": "b780f9d6-2e56-41c6-94a3-4f08e6212bc2",
+      "typeVersion": 1.1,
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -1136,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "50b6a4d7-3311-4796-a407-75151859b18c",
+              "leftValue": "={{ $json.fileSize }}",
+              "rightValue": "=0 B",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -384,
+        0
+      ],
+      "id": "b2bc0d6f-580f-4ffa-a7f1-54136418889c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "=khornykhormics-sub-scene",
+        "fileName": "=session{{ $('Start').item.json.session_id }}/screen{{ $('Start').item.json.screen_number }}/panel{{ $('Start').item.json.panel_id }}.png",
+        "additionalFields": {
+          "acl": "publicRead"
+        }
+      },
+      "type": "n8n-nodes-base.awsS3",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        -16
+      ],
+      "id": "17ae47d8-a2de-4ed6-b17c-0bdc5ae8d82b",
+      "name": "Upload a file1",
+      "credentials": {
+        "aws": {
+          "id": "zjLyOL1cpDZbpvK1",
+          "name": "AWS account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "panel_id": 5,
+          "narrative_script": "The city slept, oblivious to the threads that began to unravel. Tomorrow, I'd have to choose which thread to pull. The mundane, or the impossible.",
+          "sub_scene_description": "Kaito stands, putting on his trench coat, his back to the viewer, looking out his office window at the gray, rain-washed city waking up. He makes a silent resolution.",
+          "character_context": {
+            "Kaito Tanaka": {
+              "visual_role": "Protagonist",
+              "current_emotional_state": "resolved, determined, focused",
+              "current_action": "preparing to leave, looking out at the city with a sense of purpose."
+            }
+          },
+          "visual_metadata": "bg_city_day.jpg,resolved, impending action,full color illustration, vibrant colors, detailed backgrounds,dawn,light rain/overcast",
+          "session_id": "uuid-12345",
+          "screen_number": 1,
+          "overall_scene_summary": "Kaito Tanaka, a weary detective with a supernatural sense, investigates a crime scene that he suspects is more than it seems. Haunted by an unseen anomaly, he returns to his office to mull over the case, grappling with the burden of his perception before deciding his next step."
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Sub-Scene Prompt Generation5": {
+      "main": [
+        [
+          {
+            "node": "Sub-Scene Gen ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Sub-Scene Prompt Generation5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sub-Scene Gen ": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Upload a file1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sub-Scene Gen ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d10a6cc9-57c8-48b7-91b3-2a2756388a0c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18b5943ece4887f041a24a18a504200de4e3b11ccd257d7213c00eb8dad60b65"
+  },
+  "id": "ENZy3nFojDTcS2HN",
+  "tags": []
+}

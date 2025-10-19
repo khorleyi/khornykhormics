@@ -1,0 +1,598 @@
+{
+  "name": "generate-scene-final-final",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fb3511ae-7460-4fc2-aa6a-9052503a0baf",
+              "name": "panel_id",
+              "value": "={{ $json.panel_id }}",
+              "type": "number"
+            },
+            {
+              "id": "801ae8d8-a358-4694-82be-23185383e3a4",
+              "name": "narrative_script",
+              "value": "={{ $json.narrative_script }}",
+              "type": "string"
+            },
+            {
+              "id": "c9f3e1f1-5ceb-4bc5-a75a-3dcc478300c9",
+              "name": "sub_scene_description",
+              "value": "={{ $json.sub_scene_description }}",
+              "type": "string"
+            },
+            {
+              "id": "92a8ba12-f8f9-411a-99c2-28c1581b4d5e",
+              "name": "character_context",
+              "value": "={{ $json.character_context }}",
+              "type": "object"
+            },
+            {
+              "id": "7e46d2cc-668c-4918-9974-5eed3879174e",
+              "name": "visual_metadata",
+              "value": "={{ $json.visual_metadata }}",
+              "type": "string"
+            },
+            {
+              "id": "5f5ce00c-a54b-47e6-abe5-3690be8bbe47",
+              "name": "session_id",
+              "value": "={{ $('Generated Scene').item.json.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "e17e6b7d-322c-486a-a880-0282a0ccee49",
+              "name": "screen_number",
+              "value": "={{ $('Generated Scene').item.json.scene_number }}",
+              "type": "string"
+            },
+            {
+              "id": "19b8d183-2217-4bb4-a521-3ace8fe5c040",
+              "name": "overall_scene_summary",
+              "value": "={{ $json.overall_scene_summary }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        288
+      ],
+      "id": "792ef367-1013-4914-9e09-8e45ad14cdf7",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1664,
+        272
+      ],
+      "id": "a4ce498a-884d-47a0-a3f9-f46d62233fee",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "bucketName": "khornykhormics-sub-scene",
+        "options": {
+          "folderKey": "=session{{ $('Generated Scene').first().json.session_id }}/screen{{ $('Generated Scene').first().json.scene_number }}/"
+        }
+      },
+      "type": "n8n-nodes-base.awsS3",
+      "typeVersion": 2,
+      "position": [
+        864,
+        288
+      ],
+      "id": "903f34c9-68f9-4759-8ea4-e28f9e5cb989",
+      "name": "Get many files",
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "credentials": {
+        "aws": {
+          "id": "zjLyOL1cpDZbpvK1",
+          "name": "AWS account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "006b145f-996b-41ae-af9e-45e2740eb885",
+              "leftValue": "={{ $json.num_panels_found }}",
+              "rightValue": "={{ 5 }}",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        288
+      ],
+      "id": "a529450b-f22b-491f-a6cb-36fa9504dfd8",
+      "name": "If",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble final response to Streamlit with completed scene data\n// Input from previous node: aggregated panel data with URLs\n\nconst generatedScene = $('Generated Scene').first().json; // The clean scene_story output\nconst sessionData = $('Sub-Scene Workflow').first().json; // Original session data\nconst panelData = $input.first().json; // Aggregated panel data from Code in JavaScript2\n\n// --- 1. Update Iterative Trackers ---\nconst currentSceneNumber = generatedScene.scene_number;\nconst nextSceneNumber = currentSceneNumber + 1;\nconst newDecisionCount = (sessionData.decision_count || 0) + 1;\nconst currentPhase = sessionData.story_phase || 'opening';\n\n// Get the last decision from the session data\nconst lastDecision = sessionData.decision_history && sessionData.decision_history.length > 0\n    ? sessionData.decision_history[sessionData.decision_history.length - 1]\n    : 'NO_PREVIOUS_DECISION';\n\n// --- 2. Update Scene History ---\nconst newHistoryEntry = {\n    scene_number: currentSceneNumber,\n    summary: generatedScene.scene_summary || '',\n    user_decision_made: lastDecision\n};\n\n// --- 3. Assemble the NEW State for Streamlit to Save ---\nconst updatedSessionState = {\n    // Preserve ALL foundational data\n    session_id: sessionData.session_id,\n    user_prompt: sessionData.user_prompt,\n    overall_story: sessionData.overall_story,\n    characters: sessionData.character_profile?.characters || [],\n    protagonist_name: sessionData.character_profile?.protagonist_name || '',\n    \n    // Update Tracking Data\n    current_scene: nextSceneNumber,\n    decision_count: newDecisionCount,\n    story_phase: currentPhase,\n    is_complete: sessionData.is_complete || false,\n    \n    // Update History Arrays\n    decision_history: [...(sessionData.decision_history || [])],\n    scene_history: [...(sessionData.scene_history || []), newHistoryEntry],\n\n    // The current scene output (what Streamlit renders immediately)\n    last_generated_scene_data: generatedScene\n};\n\n// --- 4. Extract Panel URLs (already sorted by Code in JavaScript2) ---\n// Use the pre-sorted panel URLs from the previous node\nconst panels = panelData.all_panel_urls || [];\n\n// Validate we have exactly 5 panels\nif (panels.length !== 5) {\n    throw new Error(`Expected 5 panels but found ${panels.length}. Panel data: ${JSON.stringify(panelData)}`);\n}\n\n// --- 5. Assemble the Webhook Response ---\nconst finalResponseToStreamlit = {\n    status: 'scene_complete',\n    session_data_to_save: updatedSessionState,\n    render_scene: {\n        scene_number: currentSceneNumber,\n        narrative: generatedScene.narrative_text,\n        dialogue: generatedScene.dialogue_blocks,\n        choices: generatedScene.user_interaction?.mcq_choices || [],\n        panels: panels,\n        is_final_scene: generatedScene.user_interaction?.mcq_choices?.length === 0\n    }\n};\n\nreturn [{ json: finalResponseToStreamlit }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        272
+      ],
+      "id": "97e30513-15e6-4b28-ad6b-a612e09add48",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\n// --- 1. Calculate Latest User Decision ---\n// This handles both Scene 1 (empty array) and subsequent scenes.\nconst last_user_decision = $input.first().json.decision_count > 0 \n    ? input.decision_history.slice(-1)[0] // Gets the last item in the array\n    : 'NO_PREVIOUS_DECISION'; // Placeholder for Scene 1\n\n// --- 2. Extract Previous Scene Context ---\n// The initial JSON doesn't include previous_scene_story. \n// We add a fallback in case Streamlit doesn't send it yet.\nconst previous_scene_summary = input.previous_scene_story \n    ? input.previous_scene_story \n    : 'Scene 0: Story has just begun.';\n\n// --- 3. Assemble Clean Context Object for the Storyteller Agent ---\nconst prepared_context = {    \n    // Create clean, easy-to-reference variables for the prompt:\n    overall_story: $input.first().json.overall_story,\n    character_profile: $input.first().json.character_profile,\n    last_decision: last_user_decision,\n    previous_scene_summary: previous_scene_summary,\n    \n    // Directly pull current scene number and phase from the tracker\n    current_scene_number: $input.first().json.current_scene,\n    current_story_phase: $input.first().json.phase,\n\n    // This is the full history, useful for the final scene\n    full_decision_history: $input.first().json.decision_history, \n};\n\nreturn [{ json: prepared_context }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "82cdc450-28e1-4c64-8c50-1c46027af145",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# INPUTS\n- Manager's Story Framework: {{ JSON.stringify($('Sub-Scene Workflow').item.json.body.overall_story) }}\n- Character Profile: {{ JSON.stringify($('Sub-Scene Workflow').item.json.body.characters) }}\n\n# ITERATIVE STATE\n- Current Scene Number (From Session): {{ $('Sub-Scene Workflow').item.json.body.current_scene }}\n- Session ID: {{ $('Sub-Scene Workflow').item.json.body.session_id }}\n- Story Phase: {{ $('Sub-Scene Workflow').item.json.body.story_phase }}\n- User's Previous Input/Decision: {{ $json.last_decision }}\n- Previous Scene Summary (Context): {{ $json.previous_scene_summary }}\n- Full Decision History: {{ $('Sub-Scene Workflow').item.json.body.decision_history }}\n\n# ACTION: GENERATE SCENE AND METADATA\n1. Create the complete scene content, strictly following the JSON format provided in the System Instructions.\n2. **CRITICAL:** Ensure the final JSON object includes the following fields, using the exact values provided in the ITERATIVE STATE section above:\n    - **\"session_id\"** must be included.\n    - **\"scene_number\"** must match the 'Current Scene Number' from the session.\n    - **\"narrative_text\"** must be written in the voice of the Character Profile.\n3. Ensure continuity by adapting the narrative based on the 'User's Previous Input/Decision'. If the decision is 'NO_PREVIOUS_DECISION', begin with the Opening Intent from the Framework.",
+              "role": "=user"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {
+          "systemMessage": "=# ROLE\nYou are the Scene Storyteller bringing the visual novel narrative to life based on the Manager Agent's intent and the user's choices. Your output must be used directly by the frontend, so you must adhere STRICTLY to the JSON output format provided below.\n\n# OUTPUT FORMAT (JSON)\n{\n  \"scene_story\": {\n    \"scene_number\": 1,\n    \"session_id\": \"uuid-12345\", \n    \"narrative_text\": [\n      \"Text for Panel 1 (Narration and/or internal thought)\",\n      \"Text for Panel 2 (Narration and/or internal thought)\",\n      \"Text for Panel 3 (Narration and/or internal thought)\",\n      \"Text for Panel 4 (Narration and/or internal thought)\",\n      \"Text for Panel 5 (Narration and/or internal thought)\"\n    ],\n    \"dialogue_blocks\": [\n      {\"speaker\": \"Protagonist/Kaito\", \"text\": \"Dialogue text...\"},\n      {\"speaker\": \"NPC Name\", \"text\": \"Dialogue text...\"}\n    ],\n    \"user_interaction\": {\n      \"prompt_text\": \"The core dramatic question the user faces.\",\n      \"mcq_choices\": [\n        {\"choice_id\": \"1a\", \"text\": \"Choice Text A\"}\n      ],\n      \"accepts_custom_input\": true\n    },\n    \"subscreen_details\": [\n      {\n        \"panel_id\": 1,\n        \"subscreen_script\": \"Detailed visual beat for image generation (Wide shot establishing the setting).\",\n        // *** MODIFIED FIELD FOR MULTIPLE CHARACTERS ***\n        \"character_context\": {\n          \"Kaito Tanaka\": {\n            \"visual_role\": \"Protagonist\",\n            \"current_emotional_state\": \"focused, determined\",\n            \"current_action\": \"Describe the character's key action in the panel.\"\n          },\n          \"Sato (Partner)\": {\n            \"visual_role\": \"Supporting Character\",\n            \"current_emotional_state\": \"confused, concerned\",\n            \"current_action\": \"Sato is looking at Kaito with suspicion.\"\n          }\n          // Include ALL characters visible in this specific panel.\n        },\n        \"visual_metadata\": {\n          \"bg_jpg\": \"Select from available list: bg_city_night.jpg, bg_city_day.jpg, bg_apartment.jpg, bg_office.jpg, bg_street.jpg, bg_park.jpg, bg_subway.jpg, bg_rooftop.jpg\",\n          \"overall_mood\": \"adaptable to story context\",\n          \"art_style\": \"full color illustration, vibrant colors, detailed backgrounds\",\n          \"time_of_day\": \"night\",\n          \"weather\": \"heavy rain\"\n        }\n      }\n      // You must generate exactly 5 objects in this 'subscreen_details' array.\n    ],\n    \"scene_summary\": \"2-3 sentence summary for Manager Agent's next iteration.\"\n  }\n}\n\n# WRITING GUIDELINES\n1.  **Core Objective:** Fulfill the intent and feel provided by the Manager's framework.\n2.  **Visual Generation:** You must generate **exactly 5 objects** in the `subscreen_details` array.\n3.  **Multi-Character Context (CRITICAL):** For every panel in `subscreen_details`, the `character_context` field MUST contain a separate nested object for **every character visible in that panel**, keyed by their Name/Role (e.g., `\"Kaito Tanaka\": {...}`). Do NOT include the full `visual_description` here; just their role, emotion, and action.\n4.  **Dialogue & Consistency:** Use the provided Character Profiles for all dialogue and actions, maintaining their unique voices and flaws.\n5.  **Metadata:** The values for `scene_number` and `session_id` must be echoed back from the User's input context into the final JSON.\n6.  **RESOLUTION PHASE:** If the 'Story Phase' is 'resolution', set `mcq_choices` to an empty array `[]`."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "c94f248d-1468-49e9-8efa-5320d5e6ccd7",
+      "name": "Storyteller Agent",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "MGkDnEZ50RxlMm5H",
+          "name": "k.l.y.2612@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This function extracts the nested JSON string from the Storyteller Agent's output\n// and parses it into a clean JavaScript object.\n\nconst inputItem = $input.first().json;\n\n// 1. Locate and extract the raw JSON string generated by the LLM.\n// This path is standard for a successful Gemini 'Message a model' response.\nconst rawJsonString = inputItem.candidates[0].content.parts[0].text;\n\nlet parsedData;\ntry {\n    // 2. Parse the string into a JavaScript object.\n    parsedData = JSON.parse(rawJsonString);\n} catch (e) {\n    // CRITICAL Error Handling: Log the failure and stop the workflow if JSON is malformed.\n    console.error(\"Failed to parse Storyteller Agent's JSON output:\", rawJsonString);\n    throw new Error(\"Storyteller Agent returned malformed JSON. Check the LLM output for syntax errors. Error: \" + e.message);\n}\n\n// 3. Extract the clean 'scene_story' object.\n// The LLM was instructed to wrap everything inside {\"scene_story\": {...}}\nconst finalSceneStory = parsedData.scene_story;\n\n// 4. Return the clean, complete scene_story object.\n// This single item is now ready for the image pipeline and final assembly.\nreturn [\n    {\n        json: finalSceneStory\n    }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "c7cd68b0-377b-4b7f-8297-3cc6ac1e7dd1",
+      "name": "Generated Scene"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Access all input items passed to the Code node.\nconst inputItems = $input.all();\nconst outputData = [];\n\n// Helper function to safely concatenate text arrays into a single string\nfunction combineText(textArray) {\n    if (Array.isArray(textArray)) {\n        // Joins all lines with two newlines for readability (paragraph breaks)\n        return textArray.join('\\n\\n');\n    }\n    return '';\n}\n\n// Helper function to safely extract a single metadata string\nfunction getVisualMetadataString(visualMetadata) {\n    if (!visualMetadata) return '';\n    \n    // Concatenate key visual metadata fields into the required comma-separated string format\n    const parts = [\n        visualMetadata.bg_jpg,\n        visualMetadata.overall_mood,\n        visualMetadata.art_style,\n        visualMetadata.time_of_day,\n        visualMetadata.weather\n    ].filter(p => p !== undefined && p !== null).join(',');\n\n    return parts;\n}\n\n// 1. Process each scene in the input\nfor (const item of inputItems) {\n    // Assuming the main scene object is directly under the 'json' key if the previous node was JSON\n    // or sometimes it's the item itself if you read the file contents directly.\n    const rawScene = item.json;\n\n    // Check if the expected structure exists\n    if (rawScene && rawScene.subscreen_details && Array.isArray(rawScene.subscreen_details)) {\n        const overallSceneSumarry = $input.first().json.scene_summary;\n        const narrativeText = rawScene.narrative_text || [];\n        const dialogueBlocks = rawScene.dialogue_blocks || [];\n        const subscreenDetails = rawScene.subscreen_details;\n        \n        let narrativeIndex = 0; // Tracks position in the narrative_text array\n        let dialogueIndex = 0; // Tracks position in the dialogue_blocks array\n\n        // 2. Iterate through each panel (subscreen_details)\n        for (let i = 0; i < subscreenDetails.length; i++) {\n            const panel = subscreenDetails[i];\n            \n            // Start building the narrative script for this panel\n            let currentPanelScript = [];\n            \n            // Extract the descriptive script for the panel's visual\n            const subSceneDescription = panel.subscreen_script || '';\n            \n            // Try to assign narrative text or dialogue to this panel\n            // This logic assumes a sequential flow: narrative first, then dialogue, panel by panel.\n            \n            // A. Check for Narrative Text\n            if (narrativeIndex < narrativeText.length) {\n                // Add the next block of narrative text\n                currentPanelScript.push(narrativeText[narrativeIndex]);\n                narrativeIndex++;\n            }\n            \n            // B. Check for Dialogue\n            // The dialogue might span multiple panels, or be dense in one.\n            // For a simple conversion, we'll try to map the next available dialogue block\n            // to the current panel, mimicking a sequence.\n            if (dialogueIndex < dialogueBlocks.length) {\n                const block = dialogueBlocks[dialogueIndex];\n                \n                // Format the dialogue nicely: \"Speaker: Text\"\n                const dialogueLine = `${block.speaker}: \"${block.text}\"`;\n                currentPanelScript.push(dialogueLine);\n                dialogueIndex++;\n            }\n\n            // If there's no narrative or dialogue left, we still use the panel's visual script,\n            // but for this example, we'll stop adding text if the sources run out.\n            \n            // Combine all the collected text for this panel\n            const finalNarrativeScript = currentPanelScript.join('\\n\\n');\n\n            // 3. Construct the output object in the desired format\n            const outputPanel = {\n                panel_id: panel.panel_id,\n\n                overall_scene_summary: overallSceneSumarry,\n              \n                // The main text content for this panel\n                narrative_script: finalNarrativeScript, \n                \n                // The visual description for the artist\n                sub_scene_description: subSceneDescription,\n                \n                // Character context is copied directly\n                character_context: panel.character_context || {},\n                \n                // Visual metadata is concatenated into a single string\n                visual_metadata: getVisualMetadataString(panel.visual_metadata)\n            };\n            \n            // Add the newly created panel to the output list\n            outputData.push({ json: outputPanel });\n        }\n        \n    } else {\n        // Handle case where the input structure is unexpected\n        console.error('Input item is missing required structure (subscreen_details).', item);\n    }\n}\n\n// 4. Return the new array of sub-scene objects\nreturn outputData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        288
+      ],
+      "id": "f1b5350c-1b2b-4b0e-a2bd-0e298b4e5f4a",
+      "name": "Parse Sub-Scene Peter"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ENZy3nFojDTcS2HN",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ENZy3nFojDTcS2HN",
+          "cachedResultName": "image-generator"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "panel_id": "={{ $json.panel_id }}",
+            "screen_number": "={{ $('Generated Scene').item.json.scene_number }}",
+            "narrative_script": "={{ $json.narrative_script }}",
+            "sub_scene_description": "={{ $json.sub_scene_description }}",
+            "character_context": "={{ JSON.stringify($json.character_context) }}",
+            "visual_metadata": "={{ $json.visual_metadata }}",
+            "overall_scene_summary": "={{ $json.overall_scene_summary }}",
+            "session_id": "={{ $('Generated Scene').item.json.session_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "panel_id",
+              "displayName": "panel_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "narrative_script",
+              "displayName": "narrative_script",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sub_scene_description",
+              "displayName": "sub_scene_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "character_context",
+              "displayName": "character_context",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object",
+              "removed": false
+            },
+            {
+              "id": "visual_metadata",
+              "displayName": "visual_metadata",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "screen_number",
+              "displayName": "screen_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "overall_scene_summary",
+              "displayName": "overall_scene_summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        288
+      ],
+      "name": "Image Generation Workflow1",
+      "id": "eaee4163-e637-4b34-992f-b3533487a49a"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-scene",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a853050c-6e9d-4a80-a1e1-9ac3b82a91a3",
+      "name": "Sub-Scene Workflow",
+      "webhookId": "14723948-8ff9-4abb-a450-57d911ff5ccf"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Count unique panel files from S3 bucket\n// Input: Array of S3 objects with 'Key' field\n// Output: Single item with panel count and file list\n\nconst s3Items = $input.all();\nconst sessionId = $('Sub-Scene Workflow').first().json.body.session_id;\nconst sceneNumber = $('Generated Scene').first().json.scene_number;\n\n// Expected folder prefix\nconst expectedPrefix = `session${sessionId}/screen${sceneNumber}/`;\n\n// Filter and collect panel files\nconst panelFiles = [];\nconst uniquePanelIds = new Set();\n\nfor (const item of s3Items) {\n  const key = item.json.Key;\n  \n  // Check if file is in the correct session/screen folder\n  if (key && key.startsWith(expectedPrefix)) {\n    // Extract panel number from filename (e.g., \"panel1.png\" -> 1)\n    const match = key.match(/panel(\\d+)\\.(png|jpg|jpeg)$/i);\n    \n    if (match) {\n      const panelId = parseInt(match[1]);\n      \n      // Only count panels 1-5\n      if (panelId >= 1 && panelId <= 5 && !uniquePanelIds.has(panelId)) {\n        uniquePanelIds.add(panelId);\n        panelFiles.push({\n          panelId: panelId,\n          key: key,\n          url: `https://khornykhormics-sub-scene.s3.us-east-1.amazonaws.com/${key}`\n        });\n      }\n    }\n  }\n}\n\n// Sort panels by panel_id\npanelFiles.sort((a, b) => a.panelId - b.panelId);\n\n// Return single aggregated result\nreturn [{\n  json: {\n    session_id: sessionId,\n    scene_number: sceneNumber,\n    num_panels_found: uniquePanelIds.size,\n    panels_complete: uniquePanelIds.size >= 5,\n    panel_files: panelFiles,\n    all_panel_urls: panelFiles.map(p => p.url)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        288
+      ],
+      "id": "0d54786c-0ab6-4064-bd3a-71b3383b35e7",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        656,
+        288
+      ],
+      "id": "3fa168fe-7994-4be3-a0d8-5edcfaa95d53",
+      "name": "Wait",
+      "webhookId": "c25124ca-c8b7-495a-ab4d-bfb37c57daee"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1232,
+        432
+      ],
+      "id": "b619d664-e3b2-468c-8ef6-b44c754cfada",
+      "name": "Wait1",
+      "webhookId": "c25124ca-c8b7-495a-ab4d-bfb37c57daee"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track retry attempts for polling S3 bucket\n// This node increments retry counter and checks if we've exceeded max retries\n\nconst inputData = $input.first().json;\nconst MAX_RETRIES = 15; // 15 retries * 20 seconds = 5 minutes max wait\n\n// Initialize or increment retry counter\nlet retryCount = inputData.retry_count || 0;\nretryCount++;\n\n// Check if we've exceeded max retries\nif (retryCount > MAX_RETRIES) {\n    throw new Error(\n        `Timeout: Failed to generate all panels after ${MAX_RETRIES} attempts (${MAX_RETRIES * 20} seconds). ` +\n        `Found ${inputData.num_panels_found || 0} out of 5 panels. ` +\n        `Session: ${inputData.session_id}, Scene: ${inputData.scene_number}`\n    );\n}\n\n// Pass through data with updated retry count\nreturn [{\n    json: {\n        ...inputData,\n        retry_count: retryCount,\n        retry_message: `Retry attempt ${retryCount}/${MAX_RETRIES} - waiting for panels to complete...`\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        432
+      ],
+      "id": "28852e3d-722e-465c-aa0e-73f5e44237f2",
+      "name": "Retry Counter"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Image Generation Workflow1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many files": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Storyteller Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Storyteller Agent": {
+      "main": [
+        [
+          {
+            "node": "Generated Scene",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generated Scene": {
+      "main": [
+        [
+          {
+            "node": "Parse Sub-Scene Peter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Sub-Scene Peter": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Generation Workflow1": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sub-Scene Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get many files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Get many files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Counter": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "40d81dc8-23e8-45ba-b07a-cd1a7db9ebcc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18b5943ece4887f041a24a18a504200de4e3b11ccd257d7213c00eb8dad60b65"
+  },
+  "id": "P1JyUpcqydaVKOua",
+  "tags": []
+}
