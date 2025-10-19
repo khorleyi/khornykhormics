@@ -4,7 +4,7 @@ A multi-page Streamlit application for creating interactive manga-style visual n
 ## Cursor Hackathon Aimed Track:
 **Most creative use of Gemini 2.5 Flash Image (Nano Banana)** 🍌✨
 
-#### Technology Stack 🛠️
+## Technology Stack 🛠️
 Frontend:
 Streamlit 🌊 - Interactive web interface with multi-page navigation
 Python 3.13 🐍 - Core application logic
